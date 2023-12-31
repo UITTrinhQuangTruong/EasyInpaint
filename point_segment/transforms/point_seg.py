@@ -18,7 +18,7 @@ class BaseTransform:
         
 
 class Resize(BaseTransform):
-    def __init__(self, base_size=[448, 448],
+    def __init__(self, base_size = [448, 448],
                  skip_clicks=-1,
                  ):
         super().__init__()
@@ -39,7 +39,14 @@ class Resize(BaseTransform):
         if self.rmin is None:
             self.rmin, self.rmax, self.cmin, self.cmax = 0, image_nd.shape[2] - 1, 0, image_nd.shape[3] - 1
             self.image_changed = True
-        crop_height, crop_width = self.base_size 
+        if isinstance(self.base_size, int):
+            height = self.rmax - self.rmin + 1
+            width = self.cmax - self.cmin + 1
+            scale = self.base_size / max(height, width)
+            crop_height = int(round(height * scale))
+            crop_width = int(round(width * scale))
+        else:
+            crop_height, crop_width = self.base_size 
 
 
         clicks_list = clicks_lists[0]
@@ -65,7 +72,7 @@ class Resize(BaseTransform):
             return prob_map
 
         prob_map = torch.nn.functional.interpolate(prob_map, size=(self.rmax - self.rmin + 1, self.cmax - self.cmin + 1),
-                                                   mode='bilinear', align_corners=True)
+                                                   mode='nearest')
 
         if self._prev_probs is not None:
             new_prob_map = torch.zeros(
@@ -146,12 +153,11 @@ class ToTensor(BaseTransform):
                 (num_max_points - len(neg_clicks)) * [(-1, -1, -1)]
             total_clicks.append(pos_clicks + neg_clicks)
         points_nd = torch.tensor(total_clicks, device=self.device)
-        return image_nd, points_nd 
+        return image_nd.to(self.device), points_nd 
 
 
 class Process:
     def __init__(self, base_size, device) -> None:
-        self.base_size = base_size
         self.transforms = [SigmoidForPred(), AddHorizontalFlip(), ToTensor(device=device)]
     
     def preprocess(self, image_nd, points_nd):
